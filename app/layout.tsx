@@ -11,13 +11,13 @@ const poppins = Poppins({ subsets: ["latin"], weight: ['400', '500', '600', '700
 export const metadata: Metadata = {
   title: 'HIMSA - Himpunan Santri Almahir',
   description: 'Web app organisasi HIMSA dengan fitur posting, chat, dan manajemen konten',
-  generator: 'v0.app',
   icons: {
     icon: [
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
     ],
   },
 }
@@ -30,6 +30,9 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
         <style>{`
           :root {
             --primary: #098dd8;
