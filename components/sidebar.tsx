@@ -1,23 +1,15 @@
-'use client'
+"'use client"
 
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import {
-  Home,
-  Upload,
-  MessageSquare,
-  Info,
-  FileText,
-  Settings,
-  LogOut,
-  Menu,
-  ChevronRight,
-  Volume2,
-  VolumeX,
-  Calendar,
+  Home, Upload, MessageSquare, Info, FileText, Settings, LogOut,
+  ChevronRight, Volume2, VolumeX, Calendar, Users, Wallet, Utensils, Moon,
+  LayoutDashboard
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { useApp } from '@/providers/app-provider'
 import { cn } from '@/lib/utils'
 
@@ -26,129 +18,104 @@ interface SidebarProps {
   onCollapsedChange: (collapsed: boolean) => void
 }
 
-const DIVISIONS = [
-  'Kebersihan',
-  'Kesehatan',
-  'Keamanan',
-  'Kesejahteraan',
-  'Olahraga',
-  'Dakwah',
-  'Bahasa',
-  'Wakil',
-  'Ketua',
-]
-
 export function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, logout, backSoundEnabled, setBackSoundEnabled } = useApp()
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null)
-  const [oscillatorRef, setOscillatorRef] = useState<OscillatorNode | null>(null)
-
-  useEffect(() => {
-    if (backSoundEnabled && !audioContext) {
-      // Initialize Web Audio API
-      try {
-        const context = new (window.AudioContext || (window as any).webkitAudioContext)()
-        setAudioContext(context)
-
-        // Create gentle ambient sound
-        const osc = context.createOscillator()
-        const gain = context.createGain()
-
-        osc.frequency.value = 110 // A2 frequency
-        osc.type = 'sine'
-        gain.gain.value = 0.05 // Very low volume for ambient
-
-        osc.connect(gain)
-        gain.connect(context.destination)
-
-        osc.start()
-        setOscillatorRef(osc)
-      } catch (e) {
-        console.error('Audio context error:', e)
-      }
-    } else if (!backSoundEnabled && audioContext) {
-      // Stop and cleanup
-      if (oscillatorRef) {
-        try {
-          oscillatorRef.stop()
-        } catch (e) {
-          // Already stopped
-        }
-      }
-      try {
-        audioContext.close()
-      } catch (e) {
-        // Already closed
-      }
-      setAudioContext(null)
-      setOscillatorRef(null)
-    }
-  }, [backSoundEnabled])
+  const { user, logout, backSoundEnabled, setBackSoundEnabled, canUploadContent } = useApp()
 
   const handleToggleBackSound = () => {
     setBackSoundEnabled(!backSoundEnabled)
   }
 
+  const handleLogout = async () => {
+    await logout()
+    router.push('/auth/login')
+  }
+
+  const getAvatarUrl = (avatar: string | null, name: string) => {
+    if (avatar) return avatar
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`
+  }
+
   const menuItems = [
+    ...(user?.role === 'admin' ? [{ icon: LayoutDashboard, label: 'Admin Dashboard', href: '/admin/dashboard' }] : []),
     { icon: Home, label: 'Dashboard', href: '/dashboard' },
-    { icon: Calendar, label: 'Jadwal', href: '/schedule' },
-    ...(user?.role !== 'user'
-      ? [{ icon: Upload, label: 'Upload', href: '/upload' }]
-      : []),
-    { icon: MessageSquare, label: 'Chat', href: '/chat' },
-    { icon: Info, label: 'Tentang Kami', href: '/about' },
-    { icon: FileText, label: 'Proposal', href: '/proposal' },
-    { icon: Settings, label: 'Pengaturan', href: '/settings' },
+    { icon: Calendar, label: 'Kalender', href: '/schedule' },
+    { icon: Users, label: 'Absensi', href: '/absensi' },
+    { icon: Wallet, label: 'Keuangan', href: '/keuangan' },
+    { icon: Utensils, label: 'Kesejahteraan', href: '/kesejahteraan' },
+    { icon: Moon, label: 'Dakwah', href: '/dakwah' },
+    ...(canUploadContent ? [{ icon: Upload, label: 'Upload', href: '/upload' }] : []),
+    { icon: MessageSquare, label: 'Ruang Obrolan', href: '/chat' },
+    { icon: FileText, label: 'Proker', href: '/proker' },
+    { icon: Settings, label: 'Pengaturan', href: '/setting' },
   ]
 
   const isActive = (href: string) => pathname === href
 
-  const handleLogout = () => {
-    logout()
-    router.push('/auth/login')
-  }
-
   return (
     <div
       className={cn(
-        'fixed left-4 top-4 h-[calc(100vh-2rem)] rounded-xl backdrop-blur-md border border-white/20 bg-sidebar shadow-2xl transition-all duration-300 z-40',
-        collapsed ? 'w-20' : 'w-64'
+        'fixed top-4 left-4 bottom-4 backdrop-blur-md border border-white/20 bg-sidebar/90 shadow-2xl transition-all duration-300 z-40 rounded-2xl',
+        collapsed ? 'w-20' : 'w-72'
       )}
     >
       <div className="flex flex-col h-full p-4">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           {!collapsed && (
             <div className="flex flex-col">
-              <h1 className="font-semibold text-lg bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">HIMSA</h1>
-              <p className="text-xs text-muted-foreground">Santri Almahir</p>
+              <h1 className="font-orbitron text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                HIMSA
+              </h1>
+              <p className="text-[10px] text-muted-foreground">Himpunan Santri Almahir</p>
             </div>
           )}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onCollapsedChange(!collapsed)}
-            className="h-8 w-8 hover:bg-primary/20"
+            className={cn('h-8 w-8 hover:bg-primary/20', collapsed && 'mx-auto')}
           >
-            <ChevronRight className={`h-5 w-5 transition-transform duration-300 ${collapsed ? '' : 'rotate-180'}`} />
+            <ChevronRight className={cn('h-5 w-5 transition-transform duration-300', collapsed ? '' : 'rotate-180')} />
           </Button>
         </div>
 
-        {/* User Info */}
-        {!collapsed && user && (
-          <div className="mb-6 p-3 bg-primary/10 rounded-lg border border-primary/20">
-            <p className="text-sm font-semibold text-primary">{user.name}</p>
-            <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
-            {user.division && (
-              <p className="text-xs text-accent mt-1">{user.division}</p>
+        {/* User Info dengan Avatar */}
+        {user && (
+          <div className={cn(
+            "mb-6 p-3 bg-primary/10 rounded-lg border border-primary/20",
+            collapsed && "flex justify-center p-2"
+          )}>
+            {collapsed ? (
+              <Avatar className="h-10 w-10 border-2 border-primary/50">
+                <AvatarImage src={getAvatarUrl(user.avatar || null, user.name)} />
+                <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                  {user.name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10 border-2 border-primary/50 flex-shrink-0">
+                  <AvatarImage src={getAvatarUrl(user.avatar || null, user.name)} />
+                  <AvatarFallback className="bg-primary/20 text-primary font-semibold">
+                    {user.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-primary truncate">{user.name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
+                  {user.currentDivision && (
+                    <p className="text-xs text-accent mt-0.5 truncate">Mode: {user.currentDivision}</p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}
 
         {/* Menu Items */}
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const Icon = item.icon
             const active = isActive(item.href)
@@ -158,11 +125,13 @@ export function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
                   variant={active ? 'default' : 'ghost'}
                   className={cn(
                     'w-full justify-start',
+                    collapsed && 'justify-center px-0',
                     active && 'bg-primary text-primary-foreground'
                   )}
+                  title={collapsed ? item.label : undefined}
                 >
                   <Icon className="h-4 w-4" />
-                  {!collapsed && <span className="ml-3">{item.label}</span>}
+                  {!collapsed && <span className="ml-3 truncate">{item.label}</span>}
                 </Button>
               </Link>
             )
@@ -170,34 +139,31 @@ export function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
         </nav>
 
         {/* Bottom Section */}
-        <div className="space-y-2 border-t border-sidebar-border pt-4">
+        <div className="space-y-1 border-t border-sidebar-border pt-4 mt-2">
           <Button
             variant="ghost"
-            size={collapsed ? 'icon' : 'default'}
-            onClick={handleToggleBackSound}
             className={cn(
               'w-full justify-start',
+              collapsed && 'justify-center px-0',
               backSoundEnabled && 'bg-primary/20'
             )}
-            title={backSoundEnabled ? 'Matikan musik' : 'Nyalakan musik'}
+            onClick={handleToggleBackSound}
+            title={collapsed ? (backSoundEnabled ? 'Matikan musik' : 'Nyalakan musik') : undefined}
           >
-            {backSoundEnabled ? (
-              <Volume2 className="h-4 w-4" />
-            ) : (
-              <VolumeX className="h-4 w-4" />
-            )}
+            {backSoundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             {!collapsed && (
-              <span className="ml-3 text-xs">
-                {backSoundEnabled ? 'Musik ON' : 'Musik OFF'}
-              </span>
+              <span className="ml-3 text-xs">{backSoundEnabled ? 'Nasyid ON' : 'Nasyid OFF'}</span>
             )}
           </Button>
 
           <Button
             variant="ghost"
-            size={collapsed ? 'icon' : 'default'}
+            className={cn(
+              'w-full justify-start text-destructive hover:text-destructive',
+              collapsed && 'justify-center px-0'
+            )}
             onClick={handleLogout}
-            className="w-full justify-start text-destructive hover:text-destructive"
+            title={collapsed ? 'Logout' : undefined}
           >
             <LogOut className="h-4 w-4" />
             {!collapsed && <span className="ml-3">Logout</span>}

@@ -1,85 +1,81 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
+import { NextRequest } from 'next/server'
+import { z } from 'zod'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@/lib/supabase'
+import { createToken } from '@/lib/auth'
+import { successResponse, errorResponse, validationErrorResponse, serverErrorResponse } from '@/lib/api-utils'
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+})
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
-    console.log('[API Login] Request:', email)
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email dan password harus diisi!' },
-        { status: 400 }
-      )
+    const body = await request.json()
+    const validation = loginSchema.safeParse(body)
+    
+    if (!validation.success) {
+      return validationErrorResponse(validation.error)
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    )
+    const { email, password } = validation.data
+    
+    const supabase = createServerClient()
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-    const { data: user, error } = await supabase
+    if (error) {
+      return errorResponse(error.message, 'AUTH_ERROR', 401)
+    }
+
+    const { data: profile } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email)
+      .eq('id', data.user.id)
       .single()
 
-    if (error || !user) {
-      console.log('[API Login] User not found:', email)
-      return NextResponse.json(
-        { error: 'Email atau password salah!' },
-        { status: 401 }
-      )
+    if (!profile) {
+      return errorResponse('User profile not found', 'PROFILE_NOT_FOUND', 404)
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+    // Buat token dengan nama user
+    const token = await createToken({
+      id: profile.id,
+      email: profile.email,
+      role: profile.role,
+      divisions: profile.divisions || [],
+      currentDivision: profile.current_division,
+      name: profile.name,
+    })
 
-    if (!isPasswordValid) {
-      console.log('[API Login] Invalid password for:', email)
-      return NextResponse.json(
-        { error: 'Email atau password salah!' },
-        { status: 401 }
-      )
-    }
+    // Set cookie - PASTIKAN path dan domain benar
+    const cookieStore = await cookies()
+    cookieStore.set('auth-token', token, {
+      httpOnly: true,
+      secure: false, // Set false untuk localhost
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60,
+      path: '/',
+    })
 
-    const { data: divisions } = await supabase
-      .from('user_divisions')
-      .select('division')
-      .eq('user_id', user.id)
+    console.log('Login successful, token set for:', profile.email)
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: user.role,
+    return successResponse({
+      user: {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        role: profile.role,
+        divisions: profile.divisions,
+        currentDivision: profile.current_division,
+        avatar: profile.avatar_url,
       },
-      process.env.JWT_SECRET || 'your-secret-key-change-this',
-      { expiresIn: '7d' }
-    )
-
-    console.log('[API Login] Success:', user.id)
-
-    return NextResponse.json(
-      {
-        message: 'Login berhasil!',
-        token,
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          divisions: divisions?.map((d: any) => d.division) || [],
-        },
-      },
-      { status: 200 }
-    )
+    }, 'Login successful')
   } catch (error) {
-    console.error('[API Login] Error:', error)
-    return NextResponse.json(
-      { error: (error as Error).message || 'Terjadi kesalahan' },
-      { status: 500 }
-    )
+    console.error('Login error:', error)
+    return serverErrorResponse(error)
   }
 }

@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -8,23 +8,36 @@ import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { useApp } from '@/providers/app-provider'
 import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
   const { login, isLoading } = useApp()
-  const [email, setEmail] = useState('admin@himsa.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!email || !password) {
+      toast.error('Email dan password harus diisi')
+      return
+    }
+
+    setIsSubmitting(true)
     try {
       await login(email, password)
       toast.success('Login berhasil!')
       router.push('/dashboard')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Login gagal')
+    } catch (error: any) {
+      toast.error(error.message || 'Login gagal')
+    } finally {
+      setIsSubmitting(false)
     }
   }
+
+  const isFormLoading = isLoading || isSubmitting
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -43,10 +56,9 @@ export default function LoginPage() {
                 placeholder="Masukkan email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="bg-input/50 border-white/20"
               />
-              <p className="text-xs text-muted-foreground mt-1">Demo: admin@himsa.com</p>
             </div>
 
             <div>
@@ -56,31 +68,26 @@ export default function LoginPage() {
                 placeholder="Masukkan password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="bg-input/50 border-white/20"
               />
-              <p className="text-xs text-muted-foreground mt-1">Demo: admin123</p>
             </div>
 
             <Button
               type="submit"
               className="w-full bg-primary hover:bg-primary/90"
-              disabled={isLoading}
+              disabled={isFormLoading}
             >
-              {isLoading ? 'Sedang Login...' : 'Login'}
+              {isFormLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Login...
+                </>
+              ) : (
+                'Login'
+              )}
             </Button>
           </form>
-
-          <div className="mt-6 pt-6 border-t border-white/20">
-            <p className="text-sm text-muted-foreground mb-4">
-              Demo Users (Password: sama dengan email tanpa @himsa.com):
-            </p>
-            <div className="space-y-2 text-xs bg-muted/20 p-3 rounded border border-white/10">
-              <p>👤 <span className="text-primary">admin@himsa.com</span> / admin123</p>
-              <p>👤 <span className="text-primary">division@himsa.com</span> / division123</p>
-              <p>👤 <span className="text-primary">user@himsa.com</span> / user123</p>
-            </div>
-          </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Belum punya akun?{' '}

@@ -1,149 +1,188 @@
-'use client'
+"use client"
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { PageTransition } from '@/components/page-transition'
+import { supabase } from '@/lib/supabase'
+import { toast } from 'sonner'
+import { getDivisionNames } from '@/lib/divisions'
 
-type UserRole = 'user' | 'admin'
+type UserRole = 'user' | 'admin' | 'division' | 'santri'
 
 interface User {
   id: string
   name: string
   email: string
   role: UserRole
-  divisions: string[] // Can have multiple divisions
-  currentDivision?: string // Currently active division (for demo/testing)
+  divisions: string[]
+  currentDivision?: string
   avatar?: string
-}
-
-interface AgendaItem {
-  id: string
-  title: string
-  date: string
-  time: string
-  createdBy: string
-  createdByRole: UserRole
-  createdByDivision?: string
-  isPrivate: boolean
-  visibility: 'public' | 'division' | 'private' // public: admin/division agenda visible to all, private: only owner
+  created_at?: string
 }
 
 interface AppContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
-  logout: () => void
+  register: (name: string, email: string, password: string) => Promise<{ user: any } | undefined>
+  logout: () => Promise<void>
   switchDivision: (division: string) => void
   switchToUserMode: () => void
-  updateUser: (user: Partial<User>) => void
+  updateUser: (updates: Partial<User>) => Promise<void>
   backSoundEnabled: boolean
   setBackSoundEnabled: (enabled: boolean) => void
-  canEditSchedules: boolean // True if user is admin or in Keamanan/Kesejahteraan divisions
-  canEditHafalan: boolean // True if user is admin or in Dakwah division
+  canEditSecurity: boolean
+  canEditWelfare: boolean
+  canEditHafalan: boolean
+  canEditKas: boolean
+  canUploadContent: boolean
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
-
-const DUMMY_USERS = [
-  {
-    id: '1',
-    name: 'Admin HIMSA',
-    email: 'admin@himsa.com',
-    password: 'admin123',
-    role: 'admin' as UserRole,
-    divisions: [], // Admin tidak memiliki divisions, tapi bisa switch ke division mode
-  },
-  {
-    id: '2',
-    name: 'Mukti Dakwah & Bahasa',
-    email: 'mukti@himsa.com',
-    password: 'mukti123',
-    role: 'user' as UserRole,
-    divisions: ['Dakwah', 'Bahasa'], // Multiple divisions
-  },
-  {
-    id: '3',
-    name: 'Budi Keamanan',
-    email: 'budi@himsa.com',
-    password: 'budi123',
-    role: 'user' as UserRole,
-    divisions: ['Keamanan'],
-  },
-  {
-    id: '4',
-    name: 'Siti Kesejahteraan',
-    email: 'siti@himsa.com',
-    password: 'siti123',
-    role: 'user' as UserRole,
-    divisions: ['Kesejahteraan'],
-  },
-  {
-    id: '5',
-    name: 'Regular User',
-    email: 'user@himsa.com',
-    password: 'user123',
-    role: 'user' as UserRole,
-    divisions: [], // No divisions
-  },
-]
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [backSoundEnabled, setBackSoundEnabled] = useState(false)
+  const initializingRef = useRef(false)
+  const loadingRef = useRef(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  // Inisialisasi audio - HANYA SEKALI
   useEffect(() => {
-    // Load from localStorage
-    const savedUser = localStorage.getItem('himsa_user')
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser))
-      } catch (e) {
-        console.error('Failed to parse saved user:', e)
+    // Buat audio element sekali saja
+    if (!audioRef.current) {
+      audioRef.current = new Audio('/sounds/backsound.mp3')
+      audioRef.current.loop = true
+      audioRef.current.volume = 0.3
+    }
+
+    // Cleanup saat app di-unmount
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+        audioRef.current = null
       }
     }
-    setIsLoading(false)
   }, [])
 
-  const login = async (email: string, password: string) => {
-    setIsLoading(true)
-    try {
-      console.log('[AppProvider] Logging in:', email)
+  // Handle play/pause saat backSoundEnabled berubah
+  useEffect(() => {
+    if (!audioRef.current) return
+    
+    if (backSoundEnabled) {
+      audioRef.current.play().catch(e => {
+        console.log('Audio play failed:', e)
+      })
+    } else {
+      audioRef.current.pause()
+    }
+  }, [backSoundEnabled])
+
+  // Pastikan audio tetap jalan saat user kembali ke tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && backSoundEnabled && audioRef.current) {
+        audioRef.current.play().catch(e => console.log('Resume play failed:', e))
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [backSoundEnabled])
+
+  const toggleBackSound = () => {
+    setBackSoundEnabled(prev => !prev)
+  }
+
+  useEffect(() => {
+    const initAuth = async () => {
+      if (initializingRef.current) return
+      initializingRef.current = true
       
-      // Hit API route untuk login
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session?.user) {
+          await loadUserProfile(session.user.id)
+        }
+      } catch (error) {
+        console.error('Auth init error:', error)
+      } finally {
+        setIsLoading(false)
+        initializingRef.current = false
+      }
+    }
+
+    initAuth()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        await loadUserProfile(session.user.id)
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  const loadUserProfile = async (userId: string) => {
+    if (loadingRef.current) return
+    loadingRef.current = true
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) throw error
+
+      if (data) {
+        const allDivisions = await getDivisionNames()
+        const divisions = data.role === 'admin' ? allDivisions : (data.divisions || [])
+        
+        const userData: User = {
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          role: data.role as UserRole,
+          divisions: divisions,
+          currentDivision: data.current_division || (divisions.length > 0 ? divisions[0] : undefined),
+          avatar: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.name}`,
+          created_at: data.created_at,
+        }
+        setUser(userData)
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error)
+    } finally {
+      loadingRef.current = false
+    }
+  }
+
+  const login = async (email: string, password: string): Promise<void> => {
+    setIsLoading(true)
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
 
-      const data = await response.json()
+      if (error) throw error
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Login gagal')
+      if (data.user) {
+        await loadUserProfile(data.user.id)
+        toast.success('Login berhasil!')
       }
-
-      console.log('[AppProvider] Login success:', data.user)
-
-      // Simpan token dan user data
-      localStorage.setItem('himsa_token', data.token)
-      localStorage.setItem('himsa_user', JSON.stringify(data.user))
-
-      // Update state dengan data dari database
-      const userData: User = {
-        id: data.user.id,
-        name: data.user.name,
-        email: data.user.email,
-        role: data.user.role,
-        divisions: data.user.divisions || [],
-        currentDivision: data.user.divisions?.length > 0 ? data.user.divisions[0] : undefined,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.name}`,
-      }
-      
-      setUser(userData)
-    } catch (error) {
-      console.error('[AppProvider] Login error:', error)
+    } catch (error: any) {
+      toast.error(error.message || 'Login gagal')
       throw error
     } finally {
       setIsLoading(false)
@@ -151,57 +190,70 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   const register = async (name: string, email: string, password: string) => {
-    setIsLoading(true)
     try {
-      console.log('[AppProvider] Registering:', email)
-      
-      // Hit API route untuk register
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name },
+        },
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Register gagal')
+      if (error) {
+        if (error.message.includes('already registered')) {
+          throw new Error('Email sudah terdaftar')
+        }
+        throw error
       }
 
-      console.log('[AppProvider] Register success:', data.user)
-
-      // Simpan user data (belum ada token karena belum login)
-      localStorage.setItem('himsa_user', JSON.stringify(data.user))
-
-      // Update state dengan data dari database
-      const userData: User = {
-        id: data.user.id,
-        name: data.user.name,
-        email: data.user.email,
-        role: data.user.role,
-        divisions: [],
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.name}`,
+      if (data.user) {
+        toast.success('Registrasi berhasil! Silahkan login.')
+        return data
       }
-      
-      setUser(userData)
-    } catch (error) {
-      console.error('[AppProvider] Register error:', error)
+    } catch (error: any) {
+      toast.error(error.message || 'Registrasi gagal')
       throw error
     } finally {
       setIsLoading(false)
     }
   }
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem('himsa_user')
+  const logout = async (): Promise<void> => {
+    try {
+      setIsLoading(true)
+      const { error } = await supabase.auth.signOut()
+      
+      if (error) throw error
+      
+      setUser(null)
+      toast.success('Logout berhasil')
+      window.location.href = '/auth/login'
+    } catch (error: any) {
+      console.error('Logout error:', error)
+      toast.error('Gagal logout')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const switchDivision = (division: string) => {
-    if (user && user.divisions.includes(division)) {
-      const updated = { ...user, currentDivision: division }
-      setUser(updated)
-      localStorage.setItem('himsa_user', JSON.stringify(updated))
+    if (user) {
+      const canSwitch = user.role === 'admin' || user.divisions.includes(division)
+      
+      if (canSwitch) {
+        const updated = { ...user, currentDivision: division }
+        setUser(updated)
+        
+        supabase
+          .from('users')
+          .update({ current_division: division })
+          .eq('id', user.id)
+          .then(({ error }) => {
+            if (error) console.error('Error updating current division:', error)
+          })
+        
+        toast.success(`Beralih ke Division ${division}`)
+      }
     }
   }
 
@@ -209,20 +261,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       const updated = { ...user, currentDivision: undefined }
       setUser(updated)
-      localStorage.setItem('himsa_user', JSON.stringify(updated))
+      
+      supabase
+        .from('users')
+        .update({ current_division: null })
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.error('Error clearing current division:', error)
+        })
+      
+      toast.success('Beralih ke User Mode')
     }
   }
 
-  const updateUser = (updates: Partial<User>) => {
+  const updateUser = async (updates: Partial<User>): Promise<void> => {
     if (user) {
       const updated = { ...user, ...updates }
       setUser(updated)
-      localStorage.setItem('himsa_user', JSON.stringify(updated))
+
+      const dbUpdates: any = {}
+      if (updates.name) dbUpdates.name = updates.name
+      if (updates.avatar) dbUpdates.avatar_url = updates.avatar
+
+      if (Object.keys(dbUpdates).length > 0) {
+        const { error } = await supabase
+          .from('users')
+          .update(dbUpdates)
+          .eq('id', user.id)
+
+        if (error) {
+          toast.error('Gagal memperbarui profil')
+        } else {
+          toast.success('Profil berhasil diperbarui')
+        }
+      }
     }
   }
 
-  const canEditSchedules = user?.role === 'admin' || ['Keamanan', 'Kesejahteraan'].includes(user?.currentDivision || '')
-  const canEditHafalan = user?.role === 'admin' || user?.currentDivision === 'Dakwah'
+  const canEditSecurity = user?.role === 'admin' || user?.currentDivision === 'Keamanan' || false
+  const canEditWelfare = user?.role === 'admin' || user?.currentDivision === 'Kesejahteraan' || false
+  const canEditHafalan = user?.role === 'admin' || user?.currentDivision === 'Dakwah' || false
+  const canEditKas = user?.role === 'admin' || user?.currentDivision === 'Wakil' || false
+  const canUploadContent = user?.role === 'admin' || user?.role === 'division' || false
 
   const value: AppContextType = {
     user,
@@ -234,9 +314,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     switchToUserMode,
     updateUser,
     backSoundEnabled,
-    setBackSoundEnabled,
-    canEditSchedules,
+    setBackSoundEnabled: toggleBackSound,
+    canEditSecurity,
+    canEditWelfare,
     canEditHafalan,
+    canEditKas,
+    canUploadContent,
   }
 
   return (

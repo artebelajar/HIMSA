@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { useApp } from '@/providers/app-provider'
 import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -18,6 +19,7 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -39,14 +41,28 @@ export default function RegisterPage() {
       return
     }
 
+    if (formData.password.length < 6) {
+      toast.error('Password minimal 6 karakter')
+      return
+    }
+
+    setIsSubmitting(true)
     try {
       await register(formData.name, formData.email, formData.password)
-      toast.success('Register berhasil!')
-      router.push('/dashboard')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Register gagal')
+      toast.success('Registrasi berhasil! Silahkan login.')
+      
+      // Redirect ke login
+      setTimeout(() => {
+        router.push('/auth/login')
+      }, 1000)
+    } catch (error: any) {
+      toast.error(error.message || 'Registrasi gagal')
+    } finally {
+      setIsSubmitting(false)
     }
   }
+
+  const isFormLoading = isLoading || isSubmitting
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -66,7 +82,7 @@ export default function RegisterPage() {
                 placeholder="Masukkan nama"
                 value={formData.name}
                 onChange={handleChange}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="bg-input/50 border-white/20"
               />
             </div>
@@ -79,7 +95,7 @@ export default function RegisterPage() {
                 placeholder="Masukkan email"
                 value={formData.email}
                 onChange={handleChange}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="bg-input/50 border-white/20"
               />
             </div>
@@ -89,10 +105,10 @@ export default function RegisterPage() {
               <Input
                 type="password"
                 name="password"
-                placeholder="Masukkan password"
+                placeholder="Minimal 6 karakter"
                 value={formData.password}
                 onChange={handleChange}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="bg-input/50 border-white/20"
               />
             </div>
@@ -105,7 +121,7 @@ export default function RegisterPage() {
                 placeholder="Ulangi password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="bg-input/50 border-white/20"
               />
             </div>
@@ -113,9 +129,16 @@ export default function RegisterPage() {
             <Button
               type="submit"
               className="w-full bg-primary hover:bg-primary/90"
-              disabled={isLoading}
+              disabled={isFormLoading}
             >
-              {isLoading ? 'Sedang Mendaftar...' : 'Daftar'}
+              {isFormLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Mendaftar...
+                </>
+              ) : (
+                'Daftar'
+              )}
             </Button>
           </form>
 

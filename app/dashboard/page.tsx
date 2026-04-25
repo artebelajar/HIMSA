@@ -1,250 +1,132 @@
-'use client'
+"use client"
 
 import React, { useState, useEffect } from 'react'
 import { MainLayout } from '@/components/main-layout'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Heart, FileText, Image, Quote, ChevronRight } from 'lucide-react'
+import { Heart, FileText, Image, Quote, ChevronRight, Loader2 } from 'lucide-react'
 import { useApp } from '@/providers/app-provider'
 import { ArticleDetailModal } from '@/components/article-detail-modal'
 import { HafalanSection } from '@/components/hafalan-section'
-import { KasSection } from '@/components/kas-section'
-import { Pagination } from '@/components/pagination'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
-interface Article {
+interface Post {
   id: string
-  title: string
-  content: string
-  image: string
+  type: 'article' | 'quote' | 'poster'
+  title: string | null
+  content: string | null
+  image_url: string | null
+  aspect_ratio: string | null
   division: string
-  author: string
-  likes: number
-  liked: boolean
-  createdAt: string
+  author_id: string
+  author_name: string
+  likes_count: number
+  created_at: string
+  liked?: boolean
 }
-
-interface QuotePost {
-  id: string
-  text: string
-  division: string
-  author: string
-  color: string
-  likes: number
-  liked: boolean
-  createdAt: string
-}
-
-interface Poster {
-  id: string
-  title: string
-  image: string
-  ratio: '9:16' | '16:9' | '1:1'
-  division: string
-  author: string
-  likes: number
-  liked: boolean
-  createdAt: string
-}
-
-const DIVISIONS = [
-  'Kebersihan', 'Kesehatan', 'Keamanan', 'Kesejahteraan',
-  'Olahraga', 'Dakwah', 'Bahasa', 'Wakil', 'Ketua',
-]
-
-const QUOTE_COLORS = [
-  'from-cyan-500/20 to-blue-500/20',
-  'from-purple-500/20 to-pink-500/20',
-  'from-green-500/20 to-emerald-500/20',
-  'from-orange-500/20 to-red-500/20',
-  'from-indigo-500/20 to-cyan-500/20',
-]
 
 export default function DashboardPage() {
   const { user } = useApp()
-  const [articles, setArticles] = useState<Article[]>([])
-  const [quotes, setQuotes] = useState<QuotePost[]>([])
-  const [posters, setPosters] = useState<Poster[]>([])
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
+  const [articles, setArticles] = useState<Post[]>([])
+  const [quotes, setQuotes] = useState<Post[]>([])
+  const [posters, setPosters] = useState<Post[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedArticle, setSelectedArticle] = useState<Post | null>(null)
   const [articlePage, setArticlePage] = useState(1)
   const [quotePage, setQuotePage] = useState(1)
   const [posterPage, setPosterPage] = useState(1)
+  const [likingPost, setLikingPost] = useState<string | null>(null)
 
   const ITEMS_PER_PAGE = 10
+
+  useEffect(() => {
+    loadAllPosts()
+  }, [user])
+
+  const loadAllPosts = async () => {
+    setIsLoading(true)
+    try {
+      const url = user ? `/api/posts?userId=${user.id}` : '/api/posts'
+      const response = await fetch(url)
+      const result = await response.json()
+      
+      if (result.success) {
+        const posts = result.data as Post[]
+        setArticles(posts.filter(p => p.type === 'article'))
+        setQuotes(posts.filter(p => p.type === 'quote'))
+        setPosters(posts.filter(p => p.type === 'poster'))
+      }
+    } catch (error) {
+      console.error('Failed to load posts:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleLike = async (post: Post) => {
+    if (!user) {
+      toast.error('Silahkan login untuk menyukai postingan')
+      return
+    }
+
+    setLikingPost(post.id)
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'like',
+          post_id: post.id,
+          user_id: user.id,
+        }),
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        // Update local state
+        const updatePost = (p: Post) => 
+          p.id === post.id 
+            ? { 
+                ...p, 
+                liked: result.data.liked, 
+                likes_count: result.data.liked ? p.likes_count + 1 : p.likes_count - 1 
+              } 
+            : p
+        
+        setArticles(prev => prev.map(updatePost))
+        setQuotes(prev => prev.map(updatePost))
+        setPosters(prev => prev.map(updatePost))
+        
+        if (selectedArticle?.id === post.id) {
+          setSelectedArticle(prev => prev ? { 
+            ...prev, 
+            liked: result.data.liked, 
+            likes_count: result.data.liked ? prev.likes_count + 1 : prev.likes_count - 1 
+          } : null)
+        }
+      }
+    } catch (error) {
+      toast.error('Gagal menyukai postingan')
+    } finally {
+      setLikingPost(null)
+    }
+  }
+
   const articlesPaginated = articles.slice((articlePage - 1) * ITEMS_PER_PAGE, articlePage * ITEMS_PER_PAGE)
   const quotesPaginated = quotes.slice((quotePage - 1) * ITEMS_PER_PAGE, quotePage * ITEMS_PER_PAGE)
   const postersPaginated = posters.slice((posterPage - 1) * ITEMS_PER_PAGE, posterPage * ITEMS_PER_PAGE)
 
-  useEffect(() => {
-    const savedArticles = localStorage.getItem('himsa_articles')
-    const savedQuotes = localStorage.getItem('himsa_quotes')
-    const savedPosters = localStorage.getItem('himsa_posters')
-
-    if (savedArticles) setArticles(JSON.parse(savedArticles))
-    else {
-      const dummyArticles: Article[] = [
-        {
-          id: '1',
-          title: 'Kajian Rutin Ahad Pagi',
-          content: 'Kegiatan kajian rutin setiap hari Ahad pagi dengan tema-tema islami yang relevan dan menarik. Diikuti oleh seluruh anggota HIMSA dan terbuka untuk umum. Dalam setiap kajian, kami membahas berbagai topik mulai dari akhlak, fiqih, hingga motivasi dalam kehidupan sehari-hari.',
-          image: 'https://images.unsplash.com/photo-1517457373614-b7152f800fd1?w=500&h=300&fit=crop',
-          division: 'Dakwah',
-          author: 'Admin HIMSA',
-          likes: 24,
-          liked: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          title: 'Acara Bersih-Bersih Masjid',
-          content: 'Program kebersihan masjid yang dilakukan setiap dua minggu sekali melibatkan semua anggota divisi kebersihan. Kegiatan ini sangat penting untuk menjaga kesucian tempat ibadah kita.',
-          image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=500&h=300&fit=crop',
-          division: 'Kebersihan',
-          author: 'Divisi Kebersihan',
-          likes: 18,
-          liked: false,
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-          id: '3',
-          title: 'Pelatihan Kesehatan Mental',
-          content: 'Workshop khusus tentang kesehatan mental dan cara mengelola stress dalam kehidupan akademis. Dibimbing oleh praktisi kesehatan profesional.',
-          image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=500&h=300&fit=crop',
-          division: 'Kesehatan',
-          author: 'Divisi Kesehatan',
-          likes: 31,
-          liked: false,
-          createdAt: new Date(Date.now() - 172800000).toISOString(),
-        },
-      ]
-      setArticles(dummyArticles)
-      localStorage.setItem('himsa_articles', JSON.stringify(dummyArticles))
-    }
-
-    if (savedQuotes) setQuotes(JSON.parse(savedQuotes))
-    else {
-      const dummyQuotes: QuotePost[] = [
-        {
-          id: '1',
-          text: 'Kebersihan itu indah dan bagian dari iman',
-          division: 'Kebersihan',
-          author: 'Divisi Kebersihan',
-          color: QUOTE_COLORS[0],
-          likes: 18,
-          liked: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          text: 'Kesehatan adalah investasi terbaik untuk masa depan',
-          division: 'Kesehatan',
-          author: 'Divisi Kesehatan',
-          color: QUOTE_COLORS[1],
-          likes: 22,
-          liked: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '3',
-          text: 'Kebersamaan adalah kekuatan HIMSA',
-          division: 'Ketua',
-          author: 'Ketua Umum',
-          color: QUOTE_COLORS[2],
-          likes: 45,
-          liked: false,
-          createdAt: new Date().toISOString(),
-        },
-      ]
-      setQuotes(dummyQuotes)
-      localStorage.setItem('himsa_quotes', JSON.stringify(dummyQuotes))
-    }
-
-    if (savedPosters) setPosters(JSON.parse(savedPosters))
-    else {
-      const dummyPosters: Poster[] = [
-        {
-          id: '1',
-          title: 'Lomba Olahraga Santri 2026',
-          image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=500&h=750&fit=crop',
-          ratio: '9:16',
-          division: 'Olahraga',
-          author: 'Divisi Olahraga',
-          likes: 32,
-          liked: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          title: 'Seminar Dakwah Digital',
-          image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=400&fit=crop',
-          ratio: '1:1',
-          division: 'Dakwah',
-          author: 'Divisi Dakwah',
-          likes: 28,
-          liked: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: '3',
-          title: 'Edukasi Kesehatan Gizi',
-          image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=400&fit=crop',
-          ratio: '16:9',
-          division: 'Kesehatan',
-          author: 'Divisi Kesehatan',
-          likes: 19,
-          liked: false,
-          createdAt: new Date().toISOString(),
-        },
-      ]
-      setPosters(dummyPosters)
-      localStorage.setItem('himsa_posters', JSON.stringify(dummyPosters))
-    }
-  }, [])
-
-  const handleLike = (type: 'article' | 'quote' | 'poster', id: string) => {
-    if (type === 'article') {
-      const updated = articles.map((a) => {
-        if (a.id === id) {
-          const newLiked = !a.liked
-          return { ...a, liked: newLiked, likes: a.likes + (newLiked ? 1 : -1) }
-        }
-        return a
-      })
-      setArticles(updated)
-      localStorage.setItem('himsa_articles', JSON.stringify(updated))
-    } else if (type === 'quote') {
-      const updated = quotes.map((q) => {
-        if (q.id === id) {
-          const newLiked = !q.liked
-          return { ...q, liked: newLiked, likes: q.likes + (newLiked ? 1 : -1) }
-        }
-        return q
-      })
-      setQuotes(updated)
-      localStorage.setItem('himsa_quotes', JSON.stringify(updated))
-    } else {
-      const updated = posters.map((p) => {
-        if (p.id === id) {
-          const newLiked = !p.liked
-          return { ...p, liked: newLiked, likes: p.likes + (newLiked ? 1 : -1) }
-        }
-        return p
-      })
-      setPosters(updated)
-      localStorage.setItem('himsa_posters', JSON.stringify(updated))
-    }
-  }
-
-  const getQuoteGradient = (colorClass: string) => {
-    const colorMap: Record<string, string> = {
-      'from-cyan-500/20 to-blue-500/20': 'border-cyan-500/50 bg-cyan-500/10',
-      'from-purple-500/20 to-pink-500/20': 'border-purple-500/50 bg-purple-500/10',
-      'from-green-500/20 to-emerald-500/20': 'border-green-500/50 bg-green-500/10',
-      'from-orange-500/20 to-red-500/20': 'border-orange-500/50 bg-orange-500/10',
-      'from-indigo-500/20 to-cyan-500/20': 'border-indigo-500/50 bg-indigo-500/10',
-    }
-    return colorMap[colorClass] || 'border-primary/50 bg-primary/10'
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    )
   }
 
   return (
@@ -255,12 +137,12 @@ export default function DashboardPage() {
           <h1 className="font-orbitron text-4xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
             Dashboard
           </h1>
-          <p className="text-muted-foreground text-lg">Selamat datang, <span className="text-primary">{user?.name}</span></p>
+          <p className="text-muted-foreground text-lg">
+            Selamat datang, <span className="text-primary">{user?.name}</span>
+          </p>
         </div>
 
-        {/* Hafalan & Kas Sections */}
         <HafalanSection />
-        <KasSection />
 
         {/* Tabs */}
         <Tabs defaultValue="articles" className="w-full">
@@ -288,67 +170,93 @@ export default function DashboardPage() {
             ) : (
               <>
                 {articlesPaginated.map((article) => (
-                <Card
-                  key={article.id}
-                  className="bg-gradient-to-br from-card/50 to-card/30 border border-white/10 overflow-hidden hover:border-primary/50 transition-all duration-300 cursor-pointer group backdrop-blur-sm"
-                  onClick={() => setSelectedArticle(article)}
-                >
-                  <div className="flex gap-4 p-4">
-                    <img
-                      src={article.image}
-                      alt={article.title}
-                      className="w-40 h-40 object-cover rounded-lg border border-white/10 group-hover:border-primary/50 transition-all"
-                    />
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div>
-                        <h3 className="font-orbitron text-lg font-semibold text-foreground group-hover:text-primary transition">
-                          {article.title}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                          {article.content}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between mt-4">
-                        <div className="flex gap-3 text-xs">
-                          <span className="bg-primary/20 text-primary px-2 py-1 rounded-full font-semibold">
-                            {article.division}
-                          </span>
-                          <span className="text-muted-foreground">
-                            {article.author}
-                          </span>
+                  <Card
+                    key={article.id}
+                    className="bg-gradient-to-br from-card/50 to-card/30 border border-white/10 overflow-hidden hover:border-primary/50 transition-all duration-300 cursor-pointer group backdrop-blur-sm"
+                    onClick={() => setSelectedArticle(article)}
+                  >
+                    <div className="flex gap-4 p-4">
+                      {article.image_url && (
+                        <img
+                          src={article.image_url}
+                          alt={article.title || ''}
+                          className="w-40 h-40 object-cover rounded-lg border border-white/10 group-hover:border-primary/50 transition-all"
+                        />
+                      )}
+                      <div className="flex-1 flex flex-col justify-between">
+                        <div>
+                          <h3 className="font-orbitron text-lg font-semibold text-foreground group-hover:text-primary transition">
+                            {article.title}
+                          </h3>
+                          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                            {article.content}
+                          </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleLike('article', article.id)
-                            }}
-                            className="h-8 w-8"
-                          >
-                            <Heart
-                              className={cn('h-4 w-4', {
-                                'fill-destructive text-destructive': article.liked,
-                              })}
-                            />
-                          </Button>
-                          <span className="text-xs font-semibold text-muted-foreground">
-                            {article.likes}
-                          </span>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition" />
+                        <div className="flex items-center justify-between mt-4">
+                          <div className="flex gap-3 text-xs">
+                            <span className="bg-primary/20 text-primary px-2 py-1 rounded-full font-semibold">
+                              {article.division}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {article.author_name}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {new Date(article.created_at).toLocaleDateString('id-ID')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleLike(article)
+                              }}
+                              disabled={likingPost === article.id}
+                              className="h-8 w-8"
+                            >
+                              {likingPost === article.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Heart
+                                  className={cn('h-4 w-4', {
+                                    'fill-red-500 text-red-500': article.liked,
+                                  })}
+                                />
+                              )}
+                            </Button>
+                            <span className="text-xs font-semibold text-muted-foreground">
+                              {article.likes_count}
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition" />
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
                 ))}
                 {articles.length > ITEMS_PER_PAGE && (
-                  <Pagination
-                    currentPage={articlePage}
-                    totalPages={Math.ceil(articles.length / ITEMS_PER_PAGE)}
-                    onPageChange={setArticlePage}
-                  />
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setArticlePage(p => Math.max(1, p - 1))}
+                      disabled={articlePage === 1}
+                    >
+                      Sebelumnya
+                    </Button>
+                    <span className="text-sm text-muted-foreground px-4">
+                      Halaman {articlePage} dari {Math.ceil(articles.length / ITEMS_PER_PAGE)}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setArticlePage(p => p + 1)}
+                      disabled={articlePage >= Math.ceil(articles.length / ITEMS_PER_PAGE)}
+                    >
+                      Selanjutnya
+                    </Button>
+                  </div>
                 )}
               </>
             )}
@@ -363,51 +271,79 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {quotesPaginated.map((quote) => (
-                <Card
-                  key={quote.id}
-                  className={cn(
-                    'p-6 border backdrop-blur-sm group hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 cursor-pointer',
-                    getQuoteGradient(quote.color)
-                  )}
-                >
-                  <div className="flex flex-col h-full">
-                    <p className="text-foreground font-semibold text-center flex-1 flex items-center justify-center mb-4">
-                      {quote.text}
-                    </p>
-                    <div className="border-t border-white/20 pt-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs">
-                          <p className="text-muted-foreground">{quote.division}</p>
-                          <p className="text-primary font-semibold">{quote.author}</p>
+                  {quotesPaginated.map((quote, idx) => {
+                    const colors = [
+                      'border-cyan-500/50 bg-gradient-to-br from-cyan-500/10 to-blue-500/10',
+                      'border-purple-500/50 bg-gradient-to-br from-purple-500/10 to-pink-500/10',
+                      'border-green-500/50 bg-gradient-to-br from-green-500/10 to-emerald-500/10',
+                      'border-orange-500/50 bg-gradient-to-br from-orange-500/10 to-red-500/10',
+                      'border-indigo-500/50 bg-gradient-to-br from-indigo-500/10 to-cyan-500/10',
+                    ]
+                    return (
+                      <Card
+                        key={quote.id}
+                        className={cn('p-6 border backdrop-blur-sm group hover:shadow-lg transition-all duration-300', colors[idx % colors.length])}
+                      >
+                        <div className="flex flex-col h-full">
+                          <p className="text-foreground font-semibold text-center flex-1 flex items-center justify-center mb-4 italic">
+                            "{quote.content}"
+                          </p>
+                          <div className="border-t border-white/20 pt-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs">
+                                <p className="text-muted-foreground">{quote.division}</p>
+                                <p className="text-primary font-semibold">{quote.author_name}</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleLike(quote)}
+                                disabled={likingPost === quote.id}
+                                className="h-8 w-8"
+                              >
+                                {likingPost === quote.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Heart
+                                    className={cn('h-4 w-4', {
+                                      'fill-red-500 text-red-500': quote.liked,
+                                    })}
+                                  />
+                                )}
+                              </Button>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>{new Date(quote.created_at).toLocaleDateString('id-ID')}</span>
+                              <span>{quote.likes_count} suka</span>
+                            </div>
+                          </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleLike('quote', quote.id)}
-                          className="h-8 w-8"
-                        >
-                          <Heart
-                            className={cn('h-4 w-4', {
-                              'fill-destructive text-destructive': quote.liked,
-                            })}
-                          />
-                        </Button>
-                      </div>
-                      <span className="text-xs text-muted-foreground block text-center">
-                        {quote.likes} suka
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-                  ))}
+                      </Card>
+                    )
+                  })}
                 </div>
                 {quotes.length > ITEMS_PER_PAGE && (
-                  <Pagination
-                    currentPage={quotePage}
-                    totalPages={Math.ceil(quotes.length / ITEMS_PER_PAGE)}
-                    onPageChange={setQuotePage}
-                  />
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQuotePage(p => Math.max(1, p - 1))}
+                      disabled={quotePage === 1}
+                    >
+                      Sebelumnya
+                    </Button>
+                    <span className="text-sm text-muted-foreground px-4">
+                      Halaman {quotePage} dari {Math.ceil(quotes.length / ITEMS_PER_PAGE)}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQuotePage(p => p + 1)}
+                      disabled={quotePage >= Math.ceil(quotes.length / ITEMS_PER_PAGE)}
+                    >
+                      Selanjutnya
+                    </Button>
+                  </div>
                 )}
               </>
             )}
@@ -423,62 +359,87 @@ export default function DashboardPage() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {postersPaginated.map((poster) => {
-                const getAspectRatio = () => {
-                  if (poster.ratio === '9:16') return 'aspect-[9/16]'
-                  if (poster.ratio === '16:9') return 'aspect-video'
-                  return 'aspect-square'
-                }
-                return (
-                  <Card
-                    key={poster.id}
-                    className="bg-card/30 border border-white/10 overflow-hidden hover:border-primary/50 transition-all duration-300 group backdrop-blur-sm"
-                  >
-                    <div className="relative overflow-hidden">
-                      <img
-                        src={poster.image}
-                        alt={poster.title}
-                        className={cn(
-                          'w-full object-cover group-hover:scale-105 transition-transform duration-300',
-                          getAspectRatio()
-                        )}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                        <p className="text-white font-semibold text-sm">{poster.title}</p>
-                      </div>
-                    </div>
-                    <div className="p-4 border-t border-white/10">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs">
-                          <p className="text-muted-foreground">{poster.division}</p>
-                          <p className="text-primary font-semibold">{poster.author}</p>
+                    const getAspectRatio = () => {
+                      const ratio = poster.aspect_ratio || '1:1'
+                      if (poster.aspect_ratio === '9:16') return 'aspect-[9/16]'
+                      if (poster.aspect_ratio === '16:9') return 'aspect-video'
+                      return 'aspect-square'
+                    }
+                    return (
+                      <Card
+                        key={poster.id}
+                        className="bg-card/30 border border-white/10 overflow-hidden hover:border-primary/50 transition-all duration-300 group backdrop-blur-sm"
+                      >
+                        <div className="relative overflow-hidden">
+                          {poster.image_url && (
+                            <img
+                              src={poster.image_url}
+                              alt={poster.title || ''}
+                              className={cn(
+                                'w-full object-cover group-hover:scale-105 transition-transform duration-300',
+                                getAspectRatio()
+                              )}
+                            />
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                            <p className="text-white font-semibold text-sm">{poster.title}</p>
+                          </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleLike('poster', poster.id)}
-                          className="h-8 w-8"
-                        >
-                          <Heart
-                            className={cn('h-4 w-4', {
-                              'fill-destructive text-destructive': poster.liked,
-                            })}
-                          />
-                        </Button>
-                      </div>
-                      <span className="text-xs text-muted-foreground block mt-2 text-center">
-                        {poster.likes} suka
-                      </span>
-                    </div>
-                  </Card>
-                  )
-                })}
+                        <div className="p-4 border-t border-white/10">
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs">
+                              <p className="text-muted-foreground">{poster.division}</p>
+                              <p className="text-primary font-semibold">{poster.author_name}</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleLike(poster)}
+                              disabled={likingPost === poster.id}
+                              className="h-8 w-8"
+                            >
+                              {likingPost === poster.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Heart
+                                  className={cn('h-4 w-4', {
+                                    'fill-red-500 text-red-500': poster.liked,
+                                  })}
+                                />
+                              )}
+                            </Button>
+                          </div>
+                          <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                            <span>{new Date(poster.created_at).toLocaleDateString('id-ID')}</span>
+                            <span>{poster.likes_count} suka</span>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
                 </div>
                 {posters.length > ITEMS_PER_PAGE && (
-                  <Pagination
-                    currentPage={posterPage}
-                    totalPages={Math.ceil(posters.length / ITEMS_PER_PAGE)}
-                    onPageChange={setPosterPage}
-                  />
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPosterPage(p => Math.max(1, p - 1))}
+                      disabled={posterPage === 1}
+                    >
+                      Sebelumnya
+                    </Button>
+                    <span className="text-sm text-muted-foreground px-4">
+                      Halaman {posterPage} dari {Math.ceil(posters.length / ITEMS_PER_PAGE)}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPosterPage(p => p + 1)}
+                      disabled={posterPage >= Math.ceil(posters.length / ITEMS_PER_PAGE)}
+                    >
+                      Selanjutnya
+                    </Button>
+                  </div>
                 )}
               </>
             )}
@@ -491,7 +452,9 @@ export default function DashboardPage() {
         onOpenChange={(open) => !open && setSelectedArticle(null)}
         article={selectedArticle}
         onLike={(id) => {
-          handleLike('article', id)
+          if (selectedArticle) {
+            handleLike(selectedArticle)
+          }
         }}
       />
     </MainLayout>

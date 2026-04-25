@@ -1,27 +1,32 @@
-'use client'
+"use client"
 
 import React, { useState } from 'react'
 import { Sidebar } from './sidebar'
 import { useApp } from '@/providers/app-provider'
 import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { user } = useApp()
   const pathname = usePathname()
 
-  // Jangan tampilkan layout jika user tidak login
-  if (pathname === '/auth' || pathname === '/auth/login' || pathname === '/auth/register' || !user) {
+  const isAuthPage = pathname?.startsWith('/auth')
+  
+  if (isAuthPage || !user) {
     return <>{children}</>
   }
 
   return (
-    <div className="flex min-h-screen relative">
+    <div className="flex min-h-screen">
       <Sidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
       <main
-        className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? 'ml-28' : 'ml-80'} overflow-y-auto`}
+        className={cn(
+          'flex-1 transition-all duration-300 p-6',
+          sidebarCollapsed ? 'ml-20' : 'ml-72'
+        )}
       >
-        <div className="p-6">
+        <div className="max-w-7xl mx-auto">
           {children}
         </div>
       </main>
