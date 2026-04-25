@@ -1,0 +1,64 @@
+
+> my-project@0.1.0 build D:\tahun-kedua\HIMSA
+> next build
+
+   ▲ Next.js 15.2.0
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping validation of types
+   Linting ...
+   Collecting page data ...
+   Generating static pages (0/35) ...
+   Generating static pages (8/35) 
+   Generating static pages (17/35) 
+   Generating static pages (26/35) 
+ ✓ Generating static pages (35/35)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    3.59 kB         203 kB
+├ ○ /_not-found                          985 B           118 kB
+├ ○ /absensi                             8.74 kB         239 kB
+├ ○ /admin/dashboard                     5.33 kB         331 kB
+├ ƒ /api/admin/dashboard                 199 B           117 kB
+├ ƒ /api/admin/divisions                 199 B           117 kB
+├ ƒ /api/admin/users                     199 B           117 kB
+├ ƒ /api/agendas                         199 B           117 kB
+├ ƒ /api/auth/login                      199 B           117 kB
+├ ƒ /api/auth/logout                     199 B           117 kB
+├ ƒ /api/auth/me                         199 B           117 kB
+├ ƒ /api/auth/register                   199 B           117 kB
+├ ƒ /api/auth/update-profile             199 B           117 kB
+├ ƒ /api/dakwah                          199 B           117 kB
+├ ƒ /api/hafalan                         199 B           117 kB
+├ ƒ /api/kelas                           199 B           117 kB
+├ ƒ /api/kesejahteraan                   199 B           117 kB
+├ ƒ /api/keuangan                        199 B           117 kB
+├ ƒ /api/messages                        199 B           117 kB
+├ ƒ /api/posts                           199 B           117 kB
+├ ƒ /api/posts/[id]                      199 B           117 kB
+├ ƒ /api/proker                          199 B           117 kB
+├ ƒ /api/users                           199 B           117 kB
+├ ○ /auth/login                          1.41 kB         216 kB
+├ ○ /auth/register                       1.6 kB          216 kB
+├ ○ /chat                                8.64 kB         248 kB
+├ ○ /dakwah                              10.5 kB         241 kB
+├ ○ /dashboard                           5.23 kB         240 kB
+├ ○ /kesejahteraan                       4.87 kB         223 kB
+├ ○ /keuangan                            16.2 kB         371 kB
+├ ○ /proker                              7.93 kB         255 kB
+├ ○ /schedule                            6.98 kB         225 kB
+├ ○ /setting                             8.11 kB         260 kB
+└ ○ /upload                              10.4 kB         255 kB
++ First Load JS shared by all            117 kB
+  ├ chunks/2849-1b7b71692a67483d.js      62 kB
+  ├ chunks/394a3021-4aa0f90b051b3841.js  53 kB
+  └ other shared chunks (total)          2.05 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
