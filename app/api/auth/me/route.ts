@@ -1,35 +1,30 @@
 import { NextRequest } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
-import { createServerClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase'
 import { successResponse, unauthorizedResponse, serverErrorResponse } from '@/lib/api-utils'
-import { getCache, setCache, CACHE_TTL } from '@/lib/redis'
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser()
+    const supabase = createAdminClient()
     
-    if (!user) {
+    // Get user dari header atau query
+    const userId = request.headers.get('x-user-id') || 
+                   new URL(request.url).searchParams.get('userId')
+
+    if (!userId) {
       return unauthorizedResponse()
     }
 
-    // Try cache first
-    const cached = await getCache(`user:${user.id}`)
-    if (cached) {
-      return successResponse(cached)
-    }
-
-    const supabase = createServerClient()
     const { data: profile } = await supabase
       .from('users')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single()
 
     if (!profile) {
       return unauthorizedResponse()
     }
 
-    const userData = {
+    return successResponse({
       id: profile.id,
       email: profile.email,
       name: profile.name,
@@ -37,14 +32,7 @@ export async function GET(request: NextRequest) {
       divisions: profile.divisions,
       currentDivision: profile.current_division,
       avatar: profile.avatar_url,
-    }
-
-    await setCache(`user:${user.id}`, userData, {
-      ttl: CACHE_TTL.USER,
-      tags: [`user:${user.id}`],
     })
-
-    return successResponse(userData)
   } catch (error) {
     return serverErrorResponse(error)
   }

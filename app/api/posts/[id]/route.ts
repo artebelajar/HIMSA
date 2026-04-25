@@ -1,9 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { createServerClient } from '@/lib/supabase'
-import { requireAuth } from '@/lib/auth'
-import { successResponse, errorResponse, validationErrorResponse, serverErrorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-utils'
-import { invalidateCache, deleteCache } from '@/lib/redis'
+import { createAdminClient } from '@/lib/supabase'
+import { successResponse, errorResponse, validationErrorResponse, serverErrorResponse } from '@/lib/api-utils'
 
 const updatePostSchema = z.object({
   title: z.string().optional(),
@@ -19,8 +17,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-
-    const supabase = await createServerClient()
+    const supabase = createAdminClient()
     
     const { data, error } = await supabase
       .from('posts')
@@ -28,10 +25,7 @@ export async function GET(
       .eq('id', id)
       .single()
 
-    if (error || !data) {
-      return notFoundResponse('Post')
-    }
-
+    if (error || !data) return errorResponse('Post not found', 'NOT_FOUND', 404)
     return successResponse(data)
   } catch (error) {
     return serverErrorResponse(error)
@@ -43,36 +37,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuth().catch(() => null)
-    if (!user) {
-      return unauthorizedResponse()
-    }
-
     const { id } = await params
     const body = await request.json()
     const validation = updatePostSchema.safeParse(body)
     
-    if (!validation.success) {
-      return validationErrorResponse(validation.error)
-    }
+    if (!validation.success) return validationErrorResponse(validation.error)
 
-    const supabase = await createServerClient()
-    
-    // Check ownership
-    const { data: existingPost } = await supabase
-      .from('posts')
-      .select('author_id')
-      .eq('id', id)
-      .single()
-
-    if (!existingPost) {
-      return notFoundResponse('Post')
-    }
-
-    if (existingPost.author_id !== user.id && user.role !== 'admin') {
-      return forbiddenResponse('You can only edit your own posts')
-    }
-
+    const supabase = createAdminClient()
     const updates: any = {}
     if (validation.data.title !== undefined) updates.title = validation.data.title
     if (validation.data.content !== undefined) updates.content = validation.data.content
@@ -87,14 +58,8 @@ export async function PUT(
       .select()
       .single()
 
-    if (error) {
-      return errorResponse(error.message, 'UPDATE_ERROR', 500)
-    }
-
-    await invalidateCache('posts')
-    await deleteCache(`post:${id}`)
-
-    return successResponse(data, 'Post updated successfully')
+    if (error) return errorResponse(error.message, 'UPDATE_ERROR', 500)
+    return successResponse(data, 'Post updated')
   } catch (error) {
     return serverErrorResponse(error)
   }
@@ -105,43 +70,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuth().catch(() => null)
-    if (!user) {
-      return unauthorizedResponse()
-    }
-
     const { id } = await params
+    const supabase = createAdminClient()
 
-    const supabase = await createServerClient()
-    
-    // Check ownership
-    const { data: existingPost } = await supabase
-      .from('posts')
-      .select('author_id')
-      .eq('id', id)
-      .single()
-
-    if (!existingPost) {
-      return notFoundResponse('Post')
-    }
-
-    if (existingPost.author_id !== user.id && user.role !== 'admin') {
-      return forbiddenResponse('You can only delete your own posts')
-    }
-
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      return errorResponse(error.message, 'DELETE_ERROR', 500)
-    }
-
-    await invalidateCache('posts')
-    await deleteCache(`post:${id}`)
-
-    return successResponse(null, 'Post deleted successfully')
+    const { error } = await supabase.from('posts').delete().eq('id', id)
+    if (error) return errorResponse(error.message, 'DELETE_ERROR', 500)
+    return successResponse(null, 'Post deleted')
   } catch (error) {
     return serverErrorResponse(error)
   }

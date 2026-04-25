@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-super-secret-jwt-key-min-32-chars-long!!!'
+  process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!!!'
 )
 
 export interface JWTPayload {
@@ -26,8 +26,7 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     return payload as unknown as JWTPayload
-  } catch (error) {
-    console.error('Token verification error:', error)
+  } catch {
     return null
   }
 }
@@ -36,36 +35,22 @@ export async function getCurrentUser(): Promise<JWTPayload | null> {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('auth-token')?.value
-    
-    console.log('Token from cookie:', token ? 'exists' : 'not found')
-    
     if (!token) return null
-    
-    const payload = await verifyToken(token)
-    console.log('Token payload:', payload ? 'valid' : 'invalid')
-    
-    return payload
-  } catch (error) {
-    console.error('getCurrentUser error:', error)
+    return await verifyToken(token)
+  } catch {
     return null
   }
 }
 
 export async function requireAuth(): Promise<JWTPayload> {
   const user = await getCurrentUser()
-  
-  if (!user) {
-    throw new Error('Unauthorized')
-  }
-  
+  if (!user) throw new Error('Unauthorized')
   return user
 }
 
 export async function requireAdmin(): Promise<JWTPayload> {
   const user = await requireAuth()
-  if (user.role !== 'admin') {
-    throw new Error('Forbidden: Admin only')
-  }
+  if (user.role !== 'admin') throw new Error('Forbidden')
   return user
 }
 
