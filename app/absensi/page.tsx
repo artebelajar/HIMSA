@@ -6,9 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useApp } from '@/providers/app-provider'
 import { toast } from 'sonner'
-import { Toaster } from '@/components/ui/sonner'
 import { Users, UserPlus, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { KelasTab } from '@/components/absensi/kelas-tab'
 import { AddSantriModal } from '@/components/absensi/add-santri-modal'
 
@@ -70,11 +68,6 @@ export default function AbsensiPage() {
         setMembers(result.data.members || [])
         setAllSantri(result.data.allSantri || [])
         setAvailableSantri(result.data.availableSantri || [])
-        
-        // Jangan reset activeTab, gunakan yang sudah ada
-        if (result.data.kelas && result.data.kelas.length > 0 && !activeTab) {
-          setActiveTab(result.data.kelas[0].name)
-        }
       }
     } catch (error) {
       console.error('Failed to load data:', error)
@@ -110,7 +103,6 @@ export default function AbsensiPage() {
         toast.success('Santri berhasil ditambahkan')
         await loadData()
         setShowAddModal(false)
-        // TETAP di tab yang sama
       } else {
         toast.error(result.error || 'Gagal menambahkan santri')
       }
