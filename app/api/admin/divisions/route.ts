@@ -18,6 +18,10 @@ const updateDivisionSchema = z.object({
   is_active: z.boolean().optional(),
 })
 
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(request: NextRequest) {
   try {
     // Gunakan Admin Client - BYPASS AUTH

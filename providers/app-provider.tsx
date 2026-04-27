@@ -31,6 +31,8 @@ interface AppContextType {
   updateUser: (updates: Partial<User>) => Promise<void>
   backSoundEnabled: boolean
   setBackSoundEnabled: (enabled: boolean) => void
+  cursorTrailEnabled: boolean
+  setCursorTrailEnabled: (enabled: boolean) => void
   canEditSecurity: boolean
   canEditWelfare: boolean
   canEditHafalan: boolean
@@ -44,20 +46,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [backSoundEnabled, setBackSoundEnabled] = useState(false)
-  const initializingRef = useRef(false)
+  const [cursorTrailEnabled, setCursorTrailEnabled] = useState(true)
   const loadingRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Inisialisasi audio - HANYA SEKALI
+  // Inisialisasi audio
   useEffect(() => {
-    // Buat audio element sekali saja
     if (!audioRef.current) {
       audioRef.current = new Audio('/sounds/backsound.mp3')
       audioRef.current.loop = true
       audioRef.current.volume = 0.3
     }
-
-    // Cleanup saat app di-unmount
     return () => {
       if (audioRef.current) {
         audioRef.current.pause()
@@ -67,51 +66,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Handle play/pause saat backSoundEnabled berubah
+  // Handle play/pause backSound
   useEffect(() => {
     if (!audioRef.current) return
-    
     if (backSoundEnabled) {
-      audioRef.current.play().catch(e => {
-        console.log('Audio play failed:', e)
-      })
+      audioRef.current.play().catch(e => console.log('Audio play failed:', e))
     } else {
       audioRef.current.pause()
     }
   }, [backSoundEnabled])
 
-  // Pastikan audio tetap jalan saat user kembali ke tab
+  // Visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && backSoundEnabled && audioRef.current) {
         audioRef.current.play().catch(e => console.log('Resume play failed:', e))
       }
     }
-
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [backSoundEnabled])
 
-  const toggleBackSound = () => {
-    setBackSoundEnabled(prev => !prev)
-  }
+  const toggleBackSound = () => setBackSoundEnabled(prev => !prev)
+  const toggleCursorTrail = () => setCursorTrailEnabled(prev => !prev)
 
   useEffect(() => {
     const initAuth = async () => {
-      if (initializingRef.current) return
-      initializingRef.current = true
-      
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        
         if (session?.user) {
           await loadUserProfile(session.user.id)
+        } else {
+          setUser(null)
         }
       } catch (error) {
         console.error('Auth init error:', error)
       } finally {
         setIsLoading(false)
-        initializingRef.current = false
       }
     }
 
@@ -122,18 +113,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await loadUserProfile(session.user.id)
       } else if (event === 'SIGNED_OUT') {
         setUser(null)
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        await loadUserProfile(session.user.id)
       }
     })
 
-    return () => {
-      subscription.unsubscribe()
-    }
+    return () => subscription.unsubscribe()
   }, [])
 
   const loadUserProfile = async (userId: string) => {
     if (loadingRef.current) return
     loadingRef.current = true
-    
     try {
       const { data, error } = await supabase
         .from('users')
@@ -146,8 +136,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (data) {
         const allDivisions = await getDivisionNames()
         const divisions = data.role === 'admin' ? allDivisions : (data.divisions || [])
-        
-        const userData: User = {
+        setUser({
           id: data.id,
           name: data.name,
           email: data.email,
@@ -156,8 +145,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           currentDivision: data.current_division || (divisions.length > 0 ? divisions[0] : undefined),
           avatar: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.name}`,
           created_at: data.created_at,
-        }
-        setUser(userData)
+        })
       }
     } catch (error) {
       console.error('Error loading user profile:', error)
@@ -168,15 +156,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string): Promise<void> => {
     setIsLoading(true)
-    
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
-
       if (data.user) {
         await loadUserProfile(data.user.id)
         toast.success('Login berhasil!')
@@ -192,20 +174,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const register = async (name: string, email: string, password: string) => {
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name },
-        },
+        email, password,
+        options: { data: { name } },
       })
-
       if (error) {
-        if (error.message.includes('already registered')) {
-          throw new Error('Email sudah terdaftar')
-        }
+        if (error.message.includes('already registered')) throw new Error('Email sudah terdaftar')
         throw error
       }
-
       if (data.user) {
         toast.success('Registrasi berhasil! Silahkan login.')
         return data
@@ -213,8 +188,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       toast.error(error.message || 'Registrasi gagal')
       throw error
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -222,14 +195,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true)
       const { error } = await supabase.auth.signOut()
-      
       if (error) throw error
-      
       setUser(null)
       toast.success('Logout berhasil')
       window.location.href = '/auth/login'
     } catch (error: any) {
-      console.error('Logout error:', error)
       toast.error('Gagal logout')
     } finally {
       setIsLoading(false)
@@ -239,19 +209,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const switchDivision = (division: string) => {
     if (user) {
       const canSwitch = user.role === 'admin' || user.divisions.includes(division)
-      
       if (canSwitch) {
         const updated = { ...user, currentDivision: division }
         setUser(updated)
-        
-        supabase
-          .from('users')
-          .update({ current_division: division })
-          .eq('id', user.id)
-          .then(({ error }) => {
-            if (error) console.error('Error updating current division:', error)
-          })
-        
+        supabase.from('users').update({ current_division: division }).eq('id', user.id).then(({ error }) => {
+          if (error) console.error('Error updating current division:', error)
+        })
         toast.success(`Beralih ke Division ${division}`)
       }
     }
@@ -261,15 +224,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       const updated = { ...user, currentDivision: undefined }
       setUser(updated)
-      
-      supabase
-        .from('users')
-        .update({ current_division: null })
-        .eq('id', user.id)
-        .then(({ error }) => {
-          if (error) console.error('Error clearing current division:', error)
-        })
-      
+      supabase.from('users').update({ current_division: null }).eq('id', user.id).then(({ error }) => {
+        if (error) console.error('Error clearing current division:', error)
+      })
       toast.success('Beralih ke User Mode')
     }
   }
@@ -278,22 +235,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       const updated = { ...user, ...updates }
       setUser(updated)
-
       const dbUpdates: any = {}
       if (updates.name) dbUpdates.name = updates.name
       if (updates.avatar) dbUpdates.avatar_url = updates.avatar
-
       if (Object.keys(dbUpdates).length > 0) {
-        const { error } = await supabase
-          .from('users')
-          .update(dbUpdates)
-          .eq('id', user.id)
-
-        if (error) {
-          toast.error('Gagal memperbarui profil')
-        } else {
-          toast.success('Profil berhasil diperbarui')
-        }
+        const { error } = await supabase.from('users').update(dbUpdates).eq('id', user.id)
+        if (error) toast.error('Gagal memperbarui profil')
+        else toast.success('Profil berhasil diperbarui')
       }
     }
   }
@@ -315,6 +263,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updateUser,
     backSoundEnabled,
     setBackSoundEnabled: toggleBackSound,
+    cursorTrailEnabled,
+    setCursorTrailEnabled: toggleCursorTrail,
     canEditSecurity,
     canEditWelfare,
     canEditHafalan,
@@ -333,8 +283,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 export function useApp() {
   const context = useContext(AppContext)
-  if (!context) {
-    throw new Error('useApp must be used within AppProvider')
-  }
+  if (!context) throw new Error('useApp must be used within AppProvider')
   return context
 }

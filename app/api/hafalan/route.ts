@@ -19,6 +19,9 @@ function getWeekNumber(date: Date): number {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient()

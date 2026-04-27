@@ -10,6 +10,9 @@ const loginSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()

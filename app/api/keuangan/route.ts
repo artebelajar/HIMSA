@@ -12,6 +12,9 @@ const transactionSchema = z.object({
   created_by_name: z.string(),
 })
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient()

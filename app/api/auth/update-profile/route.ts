@@ -15,6 +15,9 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(6, 'Password minimal 6 karakter'),
 })
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function PUT(request: NextRequest) {
   try {
     const supabase = createAdminClient()

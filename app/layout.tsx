@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { AppProvider } from '@/providers/app-provider'
 import { CursorTrail } from '@/components/cursor-trail'
+import { CursorTrailWrapper } from '@/components/cursor-trail-wrapper'
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: '--font-space-grotesk' });
 const poppins = Poppins({ subsets: ["latin"], weight: ['400', '500', '600', '700'], variable: '--font-poppins' });
@@ -40,10 +41,30 @@ export default function RootLayout({
             --background-end: #098dd8;
           }
         `}</style>
+        {/* ... existing head ... */}
+  <script dangerouslySetInnerHTML={{
+    __html: `
+      if ('serviceWorker' in navigator && 'Notification' in window) {
+        navigator.serviceWorker.register('/service-worker.js')
+      }
+    `
+  }} />
       </head>
       <body className={`${poppins.variable} ${spaceGrotesk.variable} font-sans antialiased bg-background text-foreground overflow-x-hidden`}>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js').then(
+                  (registration) => console.log('SW registered'),
+                  (err) => console.log('SW failed:', err)
+                );
+              });
+            }
+          `
+        }} />
         <AppProvider>
-          <CursorTrail />
+          <CursorTrailWrapper />
           {children}
           {process.env.NODE_ENV === 'production' && <Analytics />}
         </AppProvider>

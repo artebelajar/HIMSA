@@ -4,9 +4,9 @@ import React from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import {
-  Home, Upload, MessageSquare, Info, FileText, Settings, LogOut,
+  Home, Upload, MessageSquare, FileText, Settings, LogOut,
   ChevronRight, Volume2, VolumeX, Calendar, Users, Wallet, Utensils, Moon,
-  LayoutDashboard
+  LayoutDashboard, MousePointer2, Mouse
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -21,10 +21,14 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, logout, backSoundEnabled, setBackSoundEnabled, canUploadContent } = useApp()
+  const { user, logout, backSoundEnabled, setBackSoundEnabled, canUploadContent, cursorTrailEnabled, setCursorTrailEnabled } = useApp()
 
   const handleToggleBackSound = () => {
     setBackSoundEnabled(!backSoundEnabled)
+  }
+
+  const handleToggleCursorTrail = () => {
+    setCursorTrailEnabled(!cursorTrailEnabled)
   }
 
   const handleLogout = async () => {
@@ -140,6 +144,24 @@ export function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
 
         {/* Bottom Section */}
         <div className="space-y-1 border-t border-sidebar-border pt-4 mt-2">
+          {/* Cursor Trail Toggle */}
+          <Button
+            variant="ghost"
+            className={cn(
+              'w-full justify-start',
+              collapsed && 'justify-center px-0',
+              cursorTrailEnabled && 'bg-primary/20'
+            )}
+            onClick={handleToggleCursorTrail}
+            title={collapsed ? (cursorTrailEnabled ? 'Matikan animasi kursor' : 'Nyalakan animasi kursor') : undefined}
+          >
+            {cursorTrailEnabled ? <MousePointer2 className="h-4 w-4" /> : <Mouse className="h-4 w-4" />}
+            {!collapsed && (
+              <span className="ml-3 text-xs">{cursorTrailEnabled ? 'Animasi ON' : 'Animasi OFF'}</span>
+            )}
+          </Button>
+
+          {/* Backsound Toggle */}
           <Button
             variant="ghost"
             className={cn(
@@ -156,6 +178,7 @@ export function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
             )}
           </Button>
 
+          {/* Logout */}
           <Button
             variant="ghost"
             className={cn(

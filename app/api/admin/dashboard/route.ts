@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 import { successResponse, errorResponse, serverErrorResponse } from '@/lib/api-utils'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient()
