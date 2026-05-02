@@ -91,35 +91,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toggleCursorTrail = () => setCursorTrailEnabled(prev => !prev)
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session?.user) {
-          await loadUserProfile(session.user.id)
-        } else {
-          setUser(null)
-        }
-      } catch (error) {
-        console.error('Auth init error:', error)
-      } finally {
+  const initAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session?.user) {
+        await loadUserProfile(session.user.id)
+      } else {
+        setUser(null)
         setIsLoading(false)
+        // Redirect ke login jika tidak di halaman auth
+        if (typeof window !== 'undefined' && 
+            !window.location.pathname.startsWith('/auth/')) {
+          window.location.href = '/auth/login'
+        }
+      }
+    } catch (error) {
+      console.error('Auth init error:', error)
+      setIsLoading(false)
+    }
+  }
+
+  initAuth()
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user) {
+      await loadUserProfile(session.user.id)
+    } else if (event === 'SIGNED_OUT') {
+      setUser(null)
+      // Redirect ke login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login'
       }
     }
+  })
 
-    initAuth()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        await loadUserProfile(session.user.id)
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null)
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        await loadUserProfile(session.user.id)
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
+  return () => subscription.unsubscribe()
+}, [])
 
   const loadUserProfile = async (userId: string) => {
     if (loadingRef.current) return

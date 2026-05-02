@@ -3,8 +3,8 @@ import { Space_Grotesk, Poppins } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { AppProvider } from '@/providers/app-provider'
-import { CursorTrail } from '@/components/cursor-trail'
 import { CursorTrailWrapper } from '@/components/cursor-trail-wrapper'
+import { AuthGuard } from '@/components/auth-guard'
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: '--font-space-grotesk' });
 const poppins = Poppins({ subsets: ["latin"], weight: ['400', '500', '600', '700'], variable: '--font-poppins' });
@@ -41,16 +41,6 @@ export default function RootLayout({
             --background-end: #098dd8;
           }
         `}</style>
-        {/* ... existing head ... */}
-  <script dangerouslySetInnerHTML={{
-    __html: `
-      if ('serviceWorker' in navigator && 'Notification' in window) {
-        navigator.serviceWorker.register('/service-worker.js')
-      }
-    `
-  }} />
-      </head>
-      <body className={`${poppins.variable} ${spaceGrotesk.variable} font-sans antialiased bg-background text-foreground overflow-x-hidden`}>
         <script dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator) {
@@ -63,11 +53,22 @@ export default function RootLayout({
             }
           `
         }} />
+         <meta name="application-name" content="HIMSA" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="HIMSA" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#00d9ff" />
+  <link rel="manifest" href="/manifest.json" />
+      </head>
+      <body className={`${poppins.variable} ${spaceGrotesk.variable} font-sans antialiased bg-background text-foreground overflow-x-hidden`}>
         <AppProvider>
-          <CursorTrailWrapper />
-          {children}
-          {process.env.NODE_ENV === 'production' && <Analytics />}
+          <AuthGuard>
+            <CursorTrailWrapper />
+            {children}
+          </AuthGuard>
         </AppProvider>
+        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )
