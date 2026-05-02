@@ -62,14 +62,12 @@ export default function RootLayout({
   <link rel="manifest" href="/manifest.json" />
       </head>
       <body className={`${poppins.variable} ${spaceGrotesk.variable} font-sans antialiased bg-background text-foreground overflow-x-hidden`}>
-        <AppProvider>
-          <AuthGuard>
-            <CursorTrailWrapper />
-            {children}
-          </AuthGuard>
-        </AppProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
-      </body>
+  <AppProvider>
+    <CursorTrailWrapper />
+    {children}
+  </AppProvider>
+  {process.env.NODE_ENV === 'production' && <Analytics />}
+</body>
     </html>
   )
 }
